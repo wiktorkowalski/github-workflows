@@ -1,0 +1,95 @@
+name: .NET Docker Deploy
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: Image name without registry (e.g. wiktorkowalski/myapp)
+        required: true
+        type: string
+      dockerfile:
+        description: Path to Dockerfile
+        required: false
+        type: string
+        default: "./Dockerfile"
+      context:
+        description: Docker build context
+        required: false
+        type: string
+        default: "."
+      dotnet-version:
+        description: .NET SDK version
+        required: false
+        type: string
+        default: "10.0.x"
+      dotnet-project:
+        description: Path to .csproj/.sln to build (empty = skip .NET build)
+        required: false
+        type: string
+        default: ""
+      build-args:
+        description: Extra docker build args (newline-separated)
+        required: false
+        type: string
+        default: ""
+      deploy-compose-path:
+        description: Absolute path to docker-compose dir on deploy runner (empty = skip deploy)
+        required: false
+        type: string
+        default: ""
+      runner-labels:
+        description: JSON array of labels for build job
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      deploy-runner-labels:
+        description: JSON array of labels for deploy job
+        required: false
+        type: string
+        default: '["self-hosted"]'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        if: inputs.dotnet-project != ''
+        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          project-path: ${{ inputs.dotnet-project }}
+
+      - name: Build .NET project
+        if: inputs.dotnet-project != ''
+        run: dotnet build "${{ inputs.dotnet-project }}" --no-restore -c Release
+
+      - name: Docker build and push
+        uses: wiktorkowalski/github-workflows/actions/docker-build-push@master
+        with:
+          image-name: ${{ inputs.image-name }}
+          dockerfile: ${{ inputs.dockerfile }}
+          context: ${{ inputs.context }}
+          push: ${{ github.event_name != 'pull_request' && 'true' || 'false' }}
+          build-args: ${{ inputs.build-args }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.event_name != 'pull_request' && inputs.deploy-compose-path != ''
+    runs-on: ${{ fromJson(inputs.deploy-runner-labels) }}
+
+    steps:
+      - name: Deploy via docker compose
+        run: |
+          cd "${{ inputs.deploy-compose-path }}"
+          docker compose pull
+          docker compose up -d

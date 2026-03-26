@@ -13,16 +13,21 @@ on:
         required: false
         type: string
         default: '["self-hosted"]'
-      allowed-tools:
-        description: Comma-separated list of allowed tools
+      max-turns:
+        description: Max Claude turns (controls cost)
         required: false
-        type: string
-        default: "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash,mcp__github_comment__update_claude_comment"
-      prompt:
-        description: Custom review prompt (uses default if empty)
+        type: number
+        default: 30
+      review-prompt:
+        description: Custom review prompt appended to default (empty = default only)
         required: false
         type: string
         default: ""
+      track-progress:
+        description: Show progress tracking comment
+        required: false
+        type: boolean
+        default: true
     secrets:
       ANTHROPIC_API_KEY:
         required: true
@@ -39,7 +44,7 @@ jobs:
       (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude[bot]') ||
       (github.event_name == 'pull_request')
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       actions: read
@@ -51,23 +56,77 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Claude Code
+      - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_PROXY_URL }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          show_full_output: true
+          track_progress: ${{ inputs.track-progress }}
+          classify_inline_comments: true
+          include_fix_links: true
           claude_args: |
             --model ${{ inputs.model }}
-            --allowedTools "${{ inputs.allowed-tools }}"
+            --max-turns ${{ inputs.max-turns }}
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api:*),Read,Glob,Grep,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
           prompt: |
-            ${{ inputs.prompt != '' && inputs.prompt || format('You are reviewing PR #{0} in {1}.
+            REPO: ${{ github.repository }}
+            PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
 
-            Review the code changes and:
-            1. Post inline comments on specific lines with issues
-            2. Submit a formal review using gh api:
-               - APPROVE if no critical issues
-               - REQUEST_CHANGES if there are security vulnerabilities or bugs
+            You are a senior code reviewer. Review this PR thoroughly.
 
-            Use: gh api repos/{1}/pulls/{0}/reviews', github.event.pull_request.number || github.event.issue.number, github.repository) }}
+            ## How to review
+
+            1. Run `gh pr diff $PR_NUMBER` to see all changes
+            2. Run `gh pr view $PR_NUMBER` for PR description and context
+            3. Read relevant surrounding code with `Read` / `Grep` / `Glob` to understand context — don't review in isolation
+            4. If there are CI failures visible, inspect them with `gh api`
+
+            ## What to look for (in priority order)
+
+            **Critical (always flag):**
+            - Security vulnerabilities: injection, auth bypass, secrets exposure, SSRF, path traversal
+            - Data loss risks: missing transactions, race conditions, unsafe deletions
+            - Bugs: null derefs, off-by-one, wrong conditions, unhandled error paths
+            - Breaking changes that aren't called out in the PR description
+
+            **Important (flag when clear):**
+            - Logic errors or incorrect assumptions
+            - Missing error handling at system boundaries (external APIs, user input, file I/O)
+            - Resource leaks (unclosed connections, missing cleanup)
+            - Concurrency issues (deadlocks, missing synchronization)
+
+            **Suggestions (only when high-value):**
+            - Significantly simpler approaches that reduce complexity
+            - Performance issues with measurable impact (N+1 queries, unbounded allocations)
+
+            ## What NOT to flag
+
+            - Style preferences, naming opinions, formatting
+            - Missing docs/comments on clear code
+            - "Consider using X instead of Y" without concrete benefit
+            - Hypothetical future issues ("what if someone later...")
+            - Anything that's consistent with existing codebase patterns
+
+            ## How to give feedback
+
+            **Inline comments** — use `mcp__github_inline_comment__create_inline_comment` with `confirmed: true` for each specific issue:
+            - Point to the exact line(s) with the problem
+            - Explain WHY it's a problem, not just what's wrong
+            - For bugs/security: include a concrete scenario that triggers the issue
+            - Use ```suggestion blocks when you have a clear fix
+
+            **Summary comment** — after reviewing all files, post ONE summary using `gh pr comment`:
+            - Start with a one-line verdict: looks good / has issues that need fixing / has critical issues
+            - List any critical/important findings with file:line references
+            - If everything looks good, keep it short — don't pad with generic praise
+
+            ## Rules
+
+            - Be precise. Vague concerns waste reviewer time.
+            - Be confident. Only flag things you're sure about. If uncertain, say so explicitly.
+            - Respect existing patterns. If the codebase does X consistently, don't flag X.
+            - Fewer high-quality comments > many low-value comments. Aim for signal, not noise.
+            - Read enough context. Don't comment on a function without reading its callers.
+
+            ${{ inputs.review-prompt }}

@@ -1,0 +1,125 @@
+name: Terraform Apply
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Terraform working directory
+        required: false
+        type: string
+        default: "."
+      terraform-version:
+        description: Terraform version
+        required: false
+        type: string
+        default: "latest"
+      runner-labels:
+        description: JSON array of runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      aws-role-arn:
+        description: AWS IAM role ARN for OIDC (empty = skip AWS config)
+        required: false
+        type: string
+        default: ""
+      aws-region:
+        description: AWS region
+        required: false
+        type: string
+        default: "eu-west-1"
+      auto-approve:
+        description: Whether to auto-approve the apply
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      TF_API_TOKEN:
+        required: false
+      CLOUDFLARE_API_TOKEN:
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        required: false
+      HCLOUD_TOKEN:
+        required: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        if: inputs.aws-role-arn != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws-role-arn }}
+          role-session-name: GitHubActions-TerraformPlan
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Setup Terraform
+        uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+          install-tflint: "false"
+
+      - name: Terraform Init
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform init
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+
+      - name: Terraform Plan
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform plan -input=false -no-color
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+
+  apply:
+    name: Apply
+    needs: plan
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: terraform-apply-${{ inputs.working-directory }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        if: inputs.aws-role-arn != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws-role-arn }}
+          role-session-name: GitHubActions-TerraformApply
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Setup Terraform
+        uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+          install-tflint: "false"
+
+      - name: Terraform Apply
+        uses: wiktorkowalski/github-workflows/actions/terraform-apply@master
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          auto-approve: ${{ inputs.auto-approve && 'true' || 'false' }}
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}

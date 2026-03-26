@@ -1,0 +1,73 @@
+name: Claude Code Review
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: Claude model to use
+        required: false
+        type: string
+        default: "claude-opus-4-5-20251101"
+      runner-labels:
+        description: JSON array of runner labels
+        required: false
+        type: string
+        default: '["self-hosted"]'
+      allowed-tools:
+        description: Comma-separated list of allowed tools
+        required: false
+        type: string
+        default: "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash,mcp__github_comment__update_claude_comment"
+      prompt:
+        description: Custom review prompt (uses default if empty)
+        required: false
+        type: string
+        default: ""
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      ANTHROPIC_PROXY_URL:
+        required: false
+
+jobs:
+  review:
+    name: Claude Review
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude[bot]') ||
+      (github.event_name == 'pull_request')
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_PROXY_URL }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          claude_args: |
+            --model ${{ inputs.model }}
+            --allowedTools "${{ inputs.allowed-tools }}"
+          prompt: |
+            ${{ inputs.prompt != '' && inputs.prompt || format('You are reviewing PR #{0} in {1}.
+
+            Review the code changes and:
+            1. Post inline comments on specific lines with issues
+            2. Submit a formal review using gh api:
+               - APPROVE if no critical issues
+               - REQUEST_CHANGES if there are security vulnerabilities or bugs
+
+            Use: gh api repos/{1}/pulls/{0}/reviews', github.event.pull_request.number || github.event.issue.number, github.repository) }}

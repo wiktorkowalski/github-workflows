@@ -1,0 +1,25 @@
+name: Setup .NET
+description: Install .NET SDK and optionally restore dependencies
+
+inputs:
+  dotnet-version:
+    description: .NET SDK version to install
+    required: false
+    default: "10.0.x"
+  project-path:
+    description: Path to .csproj/.sln to restore (skipped if empty)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Restore dependencies
+      if: inputs.project-path != ''
+      shell: bash
+      run: dotnet restore "${{ inputs.project-path }}"

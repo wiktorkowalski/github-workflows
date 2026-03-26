@@ -1,0 +1,91 @@
+name: Terraform Plan
+description: Run terraform init + plan and comment results on PR
+
+inputs:
+  working-directory:
+    description: Terraform working directory
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: terraform init
+
+    - name: Terraform Plan
+      id: plan
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set +e
+        terraform plan -input=false -no-color -out=tfplan > plan_output.txt 2>&1
+        exit_code=$?
+        cat plan_output.txt
+        echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+        exit $exit_code
+
+    - name: Comment Plan on PR
+      if: always() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        PLAN_OUTPUT_PATH: ${{ inputs.working-directory }}/plan_output.txt
+      with:
+        script: |
+          const fs = require('fs');
+          let planOutput = '';
+          try {
+            planOutput = fs.readFileSync(process.env.PLAN_OUTPUT_PATH, 'utf8');
+          } catch (error) {
+            planOutput = 'No plan output available';
+          }
+
+          const maxLength = 65000;
+          if (planOutput.length > maxLength) {
+            planOutput = planOutput.substring(0, maxLength) + '\n\n... (output truncated)';
+          }
+
+          const hasErrors = planOutput.includes('Error:');
+          const status = hasErrors ? 'Plan failed' : 'Plan generated';
+          const dir = '${{ inputs.working-directory }}';
+          const header = `Terraform Plan Results (\`${dir}\`)`;
+
+          const output = `## ${header}
+
+          **Status**: ${status}
+
+          <details><summary>Show Plan Output</summary>
+
+          \`\`\`terraform
+          ${planOutput}
+          \`\`\`
+
+          </details>
+
+          *Pushed by: @${context.actor}*`;
+
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const existing = comments.data.find(c => c.body.includes(header));
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body: output
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: output
+            });
+          }

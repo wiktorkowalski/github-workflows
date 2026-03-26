@@ -1,0 +1,36 @@
+name: Setup Terraform
+description: Install Terraform and optionally TFLint
+
+inputs:
+  terraform-version:
+    description: Terraform version to install
+    required: false
+    default: "latest"
+  tf-api-token:
+    description: Terraform Cloud API token (for CLI config)
+    required: false
+    default: ""
+  install-tflint:
+    description: Whether to install TFLint
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        cli_config_credentials_token: ${{ inputs.tf-api-token }}
+
+    - name: Setup TFLint
+      if: inputs.install-tflint == 'true'
+      uses: terraform-linters/setup-tflint@v4
+      with:
+        tflint_version: latest
+
+    - name: Init TFLint
+      if: inputs.install-tflint == 'true'
+      shell: bash
+      run: tflint --init

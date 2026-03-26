@@ -1,0 +1,141 @@
+name: Terraform PR
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Terraform working directory
+        required: false
+        type: string
+        default: "."
+      terraform-version:
+        description: Terraform version
+        required: false
+        type: string
+        default: "latest"
+      runner-labels:
+        description: JSON array of runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      aws-role-arn:
+        description: AWS IAM role ARN for OIDC (empty = skip AWS config)
+        required: false
+        type: string
+        default: ""
+      aws-region:
+        description: AWS region
+        required: false
+        type: string
+        default: "eu-west-1"
+    secrets:
+      TF_API_TOKEN:
+        required: false
+      CLOUDFLARE_API_TOKEN:
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        required: false
+      HCLOUD_TOKEN:
+        required: false
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init (backend=false)
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform init -backend=false
+
+      - name: TFLint
+        working-directory: ${{ inputs.working-directory }}
+        run: tflint -f compact
+
+  format:
+    name: Format
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+          install-tflint: "false"
+
+      - name: Terraform Format Check
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform fmt -check -recursive
+
+  validate:
+    name: Validate
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+          install-tflint: "false"
+
+      - name: Terraform Init (backend=false)
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform init -backend=false
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+
+      - name: Terraform Validate
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform validate -no-color
+
+  plan:
+    name: Plan
+    needs: [lint, format, validate]
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        if: inputs.aws-role-arn != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws-role-arn }}
+          role-session-name: GitHubActions-TerraformPlan
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Setup Terraform
+        uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
+        with:
+          terraform-version: ${{ inputs.terraform-version }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+          install-tflint: "false"
+
+      - name: Terraform Plan
+        uses: wiktorkowalski/github-workflows/actions/terraform-plan@master
+        with:
+          working-directory: ${{ inputs.working-directory }}
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}

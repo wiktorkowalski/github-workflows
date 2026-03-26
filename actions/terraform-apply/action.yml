@@ -1,0 +1,30 @@
+name: Terraform Apply
+description: Run terraform init + apply
+
+inputs:
+  working-directory:
+    description: Terraform working directory
+    required: false
+    default: "."
+  auto-approve:
+    description: Whether to auto-approve the apply
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: terraform init
+
+    - name: Terraform Apply
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ "${{ inputs.auto-approve }}" = "true" ]; then
+          terraform apply -input=false -auto-approve
+        else
+          terraform apply -input=false
+        fi

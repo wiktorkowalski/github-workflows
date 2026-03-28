@@ -71,6 +71,10 @@ jobs:
         if: inputs.dotnet-project != ''
         run: dotnet build "${{ inputs.dotnet-project }}" --no-restore -c Release
 
+      - name: Test .NET project
+        if: inputs.dotnet-project != ''
+        run: dotnet test -c Release --verbosity normal
+
       - name: Docker build and push
         uses: wiktorkowalski/github-workflows/actions/docker-build-push@master
         with:

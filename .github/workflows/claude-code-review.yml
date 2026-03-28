@@ -7,7 +7,7 @@ on:
         description: Claude model to use
         required: false
         type: string
-        default: "claude-opus-4-5-20251101"
+        default: "claude-opus-4-6"
       runner-labels:
         description: JSON array of runner labels
         required: false

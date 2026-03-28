@@ -120,6 +120,16 @@ jobs:
             - List any critical/important findings with file:line references
             - If everything looks good, keep it short — don't pad with generic praise
 
+            ## Final verdict
+
+            After posting inline comments and summary, submit a formal review:
+            - If NO critical or important issues found:
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -f body="Looks good."`
+            - If critical or important issues found:
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -f body="See inline comments."`
+
+            You MUST submit exactly one review via `gh api`. This is required.
+
             ## Rules
 
             - Be precise. Vague concerns waste reviewer time.
@@ -129,3 +139,26 @@ jobs:
             - Read enough context. Don't comment on a function without reading its callers.
 
             ${{ inputs.review-prompt }}
+
+      - name: Review gate
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          sleep 5
+
+          REVIEW_STATE=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+            --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .state // empty')
+
+          echo "Claude review state: $REVIEW_STATE"
+
+          if [ "$REVIEW_STATE" = "CHANGES_REQUESTED" ]; then
+            echo "::error::Claude requested changes — see review comments"
+            exit 1
+          elif [ "$REVIEW_STATE" = "APPROVED" ]; then
+            echo "Claude approved the PR"
+          else
+            echo "::warning::No formal review submitted by Claude"
+          fi

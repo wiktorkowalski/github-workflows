@@ -137,6 +137,7 @@ jobs:
             - Be confident. Only flag things you're sure about. If uncertain, say so explicitly.
             - Respect existing patterns. If the codebase does X consistently, don't flag X.
             - Fewer high-quality comments > many low-value comments. Aim for signal, not noise.
+            - Review ALL files and flag ALL critical/important issues in a single pass. Don't stop after finding the first problem.
             - Read enough context. Don't comment on a function without reading its callers.
 
             ${{ inputs.review-prompt }}

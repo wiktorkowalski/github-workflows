@@ -151,7 +151,7 @@ jobs:
           sleep 5
 
           REVIEW_STATE=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .state // empty')
+            --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state // empty')
 
           echo "Claude review state: $REVIEW_STATE"
 

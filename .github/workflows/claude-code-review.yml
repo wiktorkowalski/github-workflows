@@ -116,20 +116,14 @@ jobs:
             - For bugs/security: include a concrete scenario that triggers the issue
             - Use ```suggestion blocks when you have a clear fix
 
-            **Summary comment** — after reviewing all files, post ONE summary using `gh pr comment`:
-            - Start with a one-line verdict: looks good / has issues that need fixing / has critical issues
-            - List any critical/important findings with file:line references
-            - If everything looks good, keep it short — don't pad with generic praise
-
-            ## Final verdict
-
-            After posting inline comments and summary, submit a formal review:
+            **Summary & verdict** — after reviewing all files, submit exactly one formal review via `gh api` with your summary as the body:
             - If NO critical or important issues found:
-              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -f body="Looks good."`
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -f body="<your summary>"`
             - If critical or important issues found:
-              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -f body="See inline comments."`
-
-            You MUST submit exactly one review via `gh api`. This is required.
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -f body="<your summary>"`
+            - Start the summary with a one-line verdict, then list any findings with file:line references
+            - If everything looks good, keep it short — don't pad with generic praise
+            - Do NOT post a separate `gh pr comment` — the review body IS your summary
 
             ## Rules
 

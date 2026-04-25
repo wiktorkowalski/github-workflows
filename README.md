@@ -90,13 +90,13 @@ jobs:
   review:
     uses: wiktorkowalski/github-workflows/.github/workflows/claude-code-review.yml@master
     with:
-      # model: claude-opus-4-6  # default
+      # model: claude-opus-4-7  # default
       # max-turns: 30  # controls cost
       # review-prompt: "Also check for Go-specific issues."  # appended to default
     secrets: inherit
 ```
 
-Required secrets: `ANTHROPIC_API_KEY`. Optional: `ANTHROPIC_PROXY_URL`.
+Required secret: `CLAUDE_CODE_OAUTH_TOKEN` (generate via `claude setup-token`; recommend setting as an org-level secret so all consuming repos inherit it).
 
 ### `Auto Approve Codeowner PR`
 

@@ -17,7 +17,7 @@ on:
         description: Max Claude turns (controls cost)
         required: false
         type: number
-        default: 30
+        default: 60
       review-prompt:
         description: Custom review prompt appended to default (empty = default only)
         required: false

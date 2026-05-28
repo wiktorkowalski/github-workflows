@@ -7,7 +7,7 @@ on:
         description: Claude model to use
         required: false
         type: string
-        default: "claude-opus-4-7"
+        default: "claude-opus-4-8"
       runner-labels:
         description: JSON array of runner labels
         required: false
@@ -36,6 +36,11 @@ jobs:
   review:
     name: Claude Review
     runs-on: ${{ fromJson(inputs.runner-labels) }}
+    # Supersede in-progress reviews when newer commits land. Scoped per-event so
+    # @claude comment/assign runs are never cancelled by a push (synchronize) run.
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}-${{ github.event_name }}
+      cancel-in-progress: true
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -79,6 +84,26 @@ jobs:
             3. Read relevant surrounding code with `Read` / `Grep` / `Glob` to understand context — don't review in isolation
             4. If there are CI failures visible, inspect them with `gh api`
 
+            ## Use your previous reviews (avoid repeating yourself)
+
+            This PR may have been reviewed by you before on an earlier commit. Before
+            writing anything, load what you already said so you don't repeat it:
+
+            - Prior formal reviews + verdicts:
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews --jq '[.[] | select(.user.login == "claude[bot]")] | .[] | {state, commit_id, body}'`
+            - Your prior inline comments (path, line, body):
+              `gh api repos/$REPO/pulls/$PR_NUMBER/comments --paginate --jq '[.[] | select(.user.login == "claude[bot]")] | .[] | {path, line, body, commit_id}'`
+
+            Then, when reviewing:
+            - **Do NOT re-post an issue you already flagged on a line that is unchanged
+              since your last review.** Use the diff to tell what actually changed.
+            - If a prior finding's code WAS changed, re-evaluate it: confirm it's fixed
+              (mention it as resolved in your summary) or, if still wrong, comment again.
+            - You may use `git log` / `git diff <prior_commit_id> ${{ github.event.pull_request.head.sha }}`
+              to see exactly what moved since your last review, but still review the WHOLE
+              PR for correctness — incremental commits can break previously-clean code.
+            - New, genuine issues introduced by the latest commits are top priority.
+
             ## What to look for (in priority order)
 
             **Critical (always flag):**
@@ -121,6 +146,13 @@ jobs:
             - Start the summary with a one-line verdict, then list any findings with file:line references
             - If everything looks good, keep it short — don't pad with generic praise
             - Do NOT post a separate `gh pr comment` — the review body IS your summary
+
+            **The verdict must reflect ALL outstanding issues, not just the latest commits.**
+            A later run sees only your most recent review. So if any critical/important
+            issue you raised in an earlier review is still unaddressed in the current code,
+            you MUST submit `REQUEST_CHANGES` again — even if the newest commits are clean.
+            Re-list those still-open findings in the summary. Only `APPROVE` when nothing
+            critical/important remains across the entire PR.
 
             ## Rules
 

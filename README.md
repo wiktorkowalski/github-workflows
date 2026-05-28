@@ -30,6 +30,35 @@ jobs:
     secrets: inherit
 ```
 
+### `.NET CI`
+
+PR checks for .NET: restore → format check (`dotnet format --verify-no-changes`) → build with warnings-as-errors → test with TRX report + Cobertura coverage summary. Point `dotnet-project` at a solution (or leave empty for the repo-root solution) so tests are included.
+
+Notes:
+
+- **`treat-warnings-as-errors` (default `true`) is the most likely first-run failure** for an existing repo — it promotes latent compiler/analyzer warnings to errors. Fix them, or pass `treat-warnings-as-errors: false` to adopt incrementally.
+- Coverage requires each test project to reference the `coverlet.collector` NuGet package (otherwise the collector silently produces nothing). The coverage-summary step is a Docker action, so it only runs on Linux runners with Docker; it's non-fatal and skips cleanly elsewhere.
+- `dotnet-project` empty resolves a root `.sln`/`.slnx` (SDK 9+) or single root project. Multi-project repos with no root solution must pass an explicit path. `.slnx` is not supported on SDK 8.x.
+- If a repo already runs `dotnet test` via `.NET Docker Deploy`, this workflow duplicates the test run — use it to add the format/warnings/coverage gate on PRs, and consider whether you still need tests in the deploy path.
+
+```yaml
+name: CI
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  dotnet-ci:
+    uses: wiktorkowalski/github-workflows/.github/workflows/dotnet-ci.yml@master
+    with:
+      dotnet-project: MyApp.sln  # empty = solution in repo root
+      # dotnet-version: "10.0.x"           # default
+      # treat-warnings-as-errors: true     # default
+      # run-format: true                   # default
+      # collect-coverage: true             # default
+    secrets: inherit
+```
+
 ### `Terraform PR`
 
 Runs lint (TFLint), format check, validate, and plan with PR comment on pull requests.

@@ -1,0 +1,133 @@
+name: .NET CI
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: .NET SDK version
+        required: false
+        type: string
+        default: "10.0.x"
+      dotnet-project:
+        description: >-
+          Path to .csproj/.sln/.slnx. Empty = the solution or single project in
+          the repo root (works for .sln/.slnx on SDK 9+). Multi-project repos
+          with no root solution must pass an explicit path.
+        required: false
+        type: string
+        default: ""
+      configuration:
+        description: Build configuration
+        required: false
+        type: string
+        default: "Release"
+      run-format:
+        description: Run `dotnet format --verify-no-changes` (the lint step)
+        required: false
+        type: boolean
+        default: true
+      treat-warnings-as-errors:
+        description: >-
+          Fail the build on compiler/analyzer warnings (-warnaserror). Likely
+          first-run failure for existing repos with latent warnings; set false
+          to adopt incrementally.
+        required: false
+        type: boolean
+        default: true
+      run-tests:
+        description: Run `dotnet test`
+        required: false
+        type: boolean
+        default: true
+      collect-coverage:
+        description: Collect Cobertura coverage and post a summary
+        required: false
+        type: boolean
+        default: true
+      runner-labels:
+        description: JSON array of runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+
+jobs:
+  ci:
+    name: .NET CI
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    # Supersede in-progress CI when newer commits land on the same ref.
+    concurrency:
+      group: dotnet-ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      checks: write
+    env:
+      PROJECT: ${{ inputs.dotnet-project }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Restore
+        run: |
+          # shellcheck disable=SC2086  # $PROJECT intentionally unquoted: empty = whole repo
+          dotnet restore $PROJECT
+
+      - name: Format check
+        if: inputs.run-format
+        run: |
+          # shellcheck disable=SC2086
+          dotnet format $PROJECT --verify-no-changes --no-restore
+
+      - name: Build
+        run: |
+          # shellcheck disable=SC2086
+          dotnet build $PROJECT --no-restore -c ${{ inputs.configuration }} ${{ inputs.treat-warnings-as-errors && '-warnaserror' || '' }}
+
+      - name: Test
+        if: inputs.run-tests
+        run: |
+          # shellcheck disable=SC2086
+          dotnet test $PROJECT -c ${{ inputs.configuration }} --no-restore --verbosity normal \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults \
+            ${{ inputs.collect-coverage && '--collect:"XPlat Code Coverage"' || '' }}
+
+      - name: Upload test results
+        if: always() && inputs.run-tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults
+          if-no-files-found: ignore
+
+      - name: Publish test report
+        if: always() && inputs.run-tests
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5  # v1.9.1
+        with:
+          name: Tests
+          path: TestResults/**/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false
+
+      - name: Coverage summary
+        # Docker action: Linux + Docker runner only. Exits non-zero if no
+        # coverage file is found (e.g. test projects lack coverlet.collector),
+        # so don't let a missing report fail the job.
+        if: always() && inputs.run-tests && inputs.collect-coverage
+        continue-on-error: true
+        uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95  # v1.3.0
+        with:
+          filename: TestResults/**/coverage.cobertura.xml
+          format: markdown
+          output: both
+          badge: true
+
+      - name: Append coverage to job summary
+        if: always() && inputs.run-tests && inputs.collect-coverage
+        run: cat code-coverage-results.md >> "$GITHUB_STEP_SUMMARY" || true

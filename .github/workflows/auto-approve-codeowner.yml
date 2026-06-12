@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Get PR number
         id: get-pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             let prNumber;
@@ -72,12 +72,12 @@ jobs:
 
       - name: Checkout
         if: steps.get-pr.outputs.pr_number
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check if author is code owner
         id: check-codeowner
         if: steps.get-pr.outputs.pr_number
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -102,7 +102,7 @@ jobs:
       - name: Wait for checks and verify
         id: check-status
         if: steps.get-pr.outputs.pr_number && steps.check-codeowner.outputs.is_codeowner == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const headSha = '${{ steps.get-pr.outputs.head_sha }}';
@@ -150,7 +150,7 @@ jobs:
 
       - name: Auto-approve PR
         if: steps.check-codeowner.outputs.is_codeowner == 'true' && steps.check-status.outputs.all_checks_passed == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const prNumber = Number('${{ steps.get-pr.outputs.pr_number }}');
@@ -187,7 +187,7 @@ jobs:
 
       - name: Log decision
         if: always() && steps.get-pr.outputs.pr_number
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const isCodeOwner = '${{ steps.check-codeowner.outputs.is_codeowner }}';

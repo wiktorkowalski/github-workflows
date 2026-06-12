@@ -19,14 +19,14 @@ runs:
   using: composite
   steps:
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@v4
       with:
         terraform_version: ${{ inputs.terraform-version }}
         cli_config_credentials_token: ${{ inputs.tf-api-token }}
 
     - name: Setup TFLint
       if: inputs.install-tflint == 'true'
-      uses: terraform-linters/setup-tflint@v4
+      uses: terraform-linters/setup-tflint@v6
       with:
         tflint_version: latest
 

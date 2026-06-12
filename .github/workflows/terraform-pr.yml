@@ -44,7 +44,7 @@ jobs:
     runs-on: ${{ fromJson(inputs.runner-labels) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
@@ -65,7 +65,7 @@ jobs:
     runs-on: ${{ fromJson(inputs.runner-labels) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
@@ -83,7 +83,7 @@ jobs:
     runs-on: ${{ fromJson(inputs.runner-labels) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: wiktorkowalski/github-workflows/actions/setup-terraform@master
@@ -114,11 +114,11 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ inputs.aws-role-arn }}
           role-session-name: GitHubActions-TerraformPlan

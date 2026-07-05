@@ -33,16 +33,16 @@ on:
         required: false
         type: boolean
         default: true
-      pre-terraform-command:
-        description: Command run from repo root before Terraform init in both plan and apply jobs, e.g. to build Lambda artifacts (empty = skip)
+      build-artifact-name:
+        description: Workflow artifact to download before Terraform init in both plan and apply jobs, e.g. Lambda zips built by a caller job (empty = skip)
         required: false
         type: string
         default: ""
-      dotnet-version:
-        description: .NET SDK version to install before pre-terraform-command (empty = skip)
+      build-artifact-path:
+        description: Path to download the build artifact into, relative to repo root
         required: false
         type: string
-        default: ""
+        default: "."
     secrets:
       TF_API_TOKEN:
         required: false
@@ -64,15 +64,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup .NET
-        if: inputs.dotnet-version != ''
-        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+      - name: Download build artifact
+        if: inputs.build-artifact-name != ''
+        uses: actions/download-artifact@v8
         with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-
-      - name: Pre-Terraform Command
-        if: inputs.pre-terraform-command != ''
-        run: ${{ inputs.pre-terraform-command }}
+          name: ${{ inputs.build-artifact-name }}
+          path: ${{ inputs.build-artifact-path }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''
@@ -119,15 +116,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup .NET
-        if: inputs.dotnet-version != ''
-        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+      - name: Download build artifact
+        if: inputs.build-artifact-name != ''
+        uses: actions/download-artifact@v8
         with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-
-      - name: Pre-Terraform Command
-        if: inputs.pre-terraform-command != ''
-        run: ${{ inputs.pre-terraform-command }}
+          name: ${{ inputs.build-artifact-name }}
+          path: ${{ inputs.build-artifact-path }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''

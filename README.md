@@ -75,13 +75,40 @@ jobs:
     with:
       working-directory: terraform/
       aws-role-arn: arn:aws:iam::123456789012:role/GitHubActions  # empty = skip AWS
-      # pre-terraform-command: dotnet lambda package ...  # runs from repo root before init in the plan job; empty = skip
-      # dotnet-version: "10.0.x"  # install .NET SDK before pre-terraform-command; empty = skip
+      # build-artifact-name: lambda-zips  # artifact from a caller build job, downloaded before init in the plan job; empty = skip
+      # build-artifact-path: dist/  # where to download it, relative to repo root (default ".")
       # run-plan: false  # skip the plan job (e.g. backend not bootstrapped yet); lint/format/validate still run
     secrets: inherit
 ```
 
 Supported secret passthrough: `TF_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `HCLOUD_TOKEN`.
+
+If the Terraform config references build outputs (e.g. Lambda zips + `source_code_hash`), build them in a caller job and hand them over as an artifact — the workflow stays language-agnostic:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+        with:
+          dotnet-version: "10.0.x"
+      - run: ./build.sh  # produce dist/*.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lambda-zips
+          path: dist/
+
+  terraform:
+    needs: build
+    uses: wiktorkowalski/github-workflows/.github/workflows/terraform-pr.yml@master
+    with:
+      working-directory: terraform/
+      build-artifact-name: lambda-zips
+      build-artifact-path: dist/
+    secrets: inherit
+```
 
 ### `Terraform Apply`
 
@@ -99,10 +126,12 @@ jobs:
     with:
       working-directory: terraform/
       aws-role-arn: arn:aws:iam::123456789012:role/GitHubActions
-      # pre-terraform-command: dotnet lambda package ...  # runs from repo root before init in both plan and apply jobs; empty = skip
-      # dotnet-version: "10.0.x"  # install .NET SDK before pre-terraform-command; empty = skip
+      # build-artifact-name: lambda-zips  # artifact from a caller build job, downloaded before init in both plan and apply jobs; empty = skip
+      # build-artifact-path: dist/  # where to download it, relative to repo root (default ".")
     secrets: inherit
 ```
+
+Build-artifact handoff works the same as in Terraform PR (see above) — build once in a caller job, and plan and apply consume the exact same zips (matters when the build is nondeterministic).
 
 ### `Claude Code Review`
 

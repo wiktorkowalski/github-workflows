@@ -1,5 +1,10 @@
 name: Claude Code Review
 
+# Reusable PR auto-review: reviews every push to a PR and gates on the verdict.
+# Recommended caller trigger (track_progress errors on other PR actions):
+#   pull_request:
+#     types: [opened, synchronize, reopened, ready_for_review]
+
 on:
   workflow_call:
     inputs:
@@ -12,12 +17,17 @@ on:
         description: JSON array of runner labels
         required: false
         type: string
-        default: '["self-hosted"]'
+        default: '["self-hosted", "homelab"]'
       max-turns:
         description: Max Claude turns (controls cost)
         required: false
         type: number
         default: 60
+      timeout-minutes:
+        description: Job timeout in minutes (frees a stuck runner slot)
+        required: false
+        type: number
+        default: 30
       review-prompt:
         description: Custom review prompt appended to default (empty = default only)
         required: false
@@ -36,16 +46,12 @@ jobs:
   review:
     name: Claude Review
     runs-on: ${{ fromJson(inputs.runner-labels) }}
-    # Supersede in-progress reviews when newer commits land. Scoped per-event so
-    # @claude comment/assign runs are never cancelled by a push (synchronize) run.
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Supersede the in-progress review when newer commits land.
     concurrency:
-      group: claude-review-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}-${{ github.event_name }}
+      group: claude-review-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
-    if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude[bot]') ||
-      (github.event_name == 'pull_request')
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     permissions:
       contents: read
       pull-requests: write
@@ -58,6 +64,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
@@ -65,17 +72,23 @@ jobs:
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          track_progress: ${{ inputs.track-progress }}
+          # track_progress only supports PR actions opened/synchronize/reopened/ready_for_review
+          track_progress: ${{ inputs.track-progress && contains(fromJson('["opened", "synchronize", "reopened", "ready_for_review"]'), github.event.action) }}
           include_fix_links: true
           claude_args: |
             --model ${{ inputs.model }}
             --max-turns ${{ inputs.max-turns }}
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api:*),Read,Glob,Grep,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api repos/${{ github.repository }}:*),Read,Glob,Grep,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
           prompt: |
             REPO: ${{ github.repository }}
-            PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+            PR_NUMBER: ${{ github.event.pull_request.number }}
+            HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
             You are a senior code reviewer. Review this PR thoroughly.
+
+            $REPO, $PR_NUMBER and $HEAD_SHA below are placeholders, not shell
+            variables — substitute the literal values above into every command,
+            without quoting the gh api path.
 
             ## How to review
 
@@ -99,7 +112,7 @@ jobs:
               since your last review.** Use the diff to tell what actually changed.
             - If a prior finding's code WAS changed, re-evaluate it: confirm it's fixed
               (mention it as resolved in your summary) or, if still wrong, comment again.
-            - You may use `git log` / `git diff <prior_commit_id> ${{ github.event.pull_request.head.sha }}`
+            - You may use `git log` / `git diff <prior_commit_id> $HEAD_SHA`
               to see exactly what moved since your last review, but still review the WHOLE
               PR for correctness — incremental commits can break previously-clean code.
             - New, genuine issues introduced by the latest commits are top priority.
@@ -143,6 +156,9 @@ jobs:
               `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -f body="<your summary>"`
             - If critical or important issues found:
               `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -f body="<your summary>"`
+            - Submit a formal review on EVERY run, even if you already approved an
+              earlier commit and nothing changed — a CI gate checks for a review on
+              the current commit and fails without one.
             - Start the summary with a one-line verdict, then list any findings with file:line references
             - If everything looks good, keep it short — don't pad with generic praise
             - Do NOT post a separate `gh pr comment` — the review body IS your summary
@@ -157,33 +173,48 @@ jobs:
             ## Rules
 
             - Be precise. Vague concerns waste reviewer time.
-            - Be confident. Only flag things you're sure about. If uncertain, say so explicitly.
+            - Report every critical/important issue you find, including ones you are
+              not fully certain about — state your confidence and severity in the
+              comment instead of silently dropping the finding. Only omit things
+              matching the "What NOT to flag" list.
             - Respect existing patterns. If the codebase does X consistently, don't flag X.
-            - Fewer high-quality comments > many low-value comments. Aim for signal, not noise.
             - Review ALL files and flag ALL critical/important issues in a single pass. Don't stop after finding the first problem.
             - Read enough context. Don't comment on a function without reading its callers.
 
             ${{ inputs.review-prompt }}
 
       - name: Review gate
-        if: always() && github.event_name == 'pull_request'
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           sleep 5
 
-          REVIEW_STATE=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(.user.login == "claude[bot]")] | last | .state // empty')
+          # Latest verdict-bearing review by Claude. --paginate runs --jq per page,
+          # so emit one line per matching review and take the overall last.
+          RESULT=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+            --jq '.[] | select(.user.login == "claude[bot]") | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED") | "\(.state) \(.commit_id)"' \
+            | tail -n 1)
 
-          echo "Claude review state: $REVIEW_STATE"
+          if [ -z "$RESULT" ]; then
+            echo "::error::No formal review by Claude found"
+            exit 1
+          fi
+
+          read -r REVIEW_STATE REVIEW_COMMIT <<< "$RESULT"
+          echo "Claude review state: $REVIEW_STATE (commit $REVIEW_COMMIT)"
 
           if [ "$REVIEW_STATE" = "CHANGES_REQUESTED" ]; then
             echo "::error::Claude requested changes — see review comments"
             exit 1
-          elif [ "$REVIEW_STATE" = "APPROVED" ]; then
-            echo "Claude approved the PR"
-          else
-            echo "::warning::No formal review submitted by Claude"
           fi
+
+          if [ "$REVIEW_COMMIT" != "$HEAD_SHA" ]; then
+            echo "::error::Latest Claude approval is for $REVIEW_COMMIT, not current head $HEAD_SHA — stale approval"
+            exit 1
+          fi
+
+          echo "Claude approved the PR at the current head commit"

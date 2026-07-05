@@ -33,6 +33,16 @@ on:
         required: false
         type: boolean
         default: true
+      pre-terraform-command:
+        description: Command run from repo root before Terraform init in both plan and apply jobs, e.g. to build Lambda artifacts (empty = skip)
+        required: false
+        type: string
+        default: ""
+      dotnet-version:
+        description: .NET SDK version to install before pre-terraform-command (empty = skip)
+        required: false
+        type: string
+        default: ""
     secrets:
       TF_API_TOKEN:
         required: false
@@ -53,6 +63,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup .NET
+        if: inputs.dotnet-version != ''
+        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Pre-Terraform Command
+        if: inputs.pre-terraform-command != ''
+        run: ${{ inputs.pre-terraform-command }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''
@@ -98,6 +118,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup .NET
+        if: inputs.dotnet-version != ''
+        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Pre-Terraform Command
+        if: inputs.pre-terraform-command != ''
+        run: ${{ inputs.pre-terraform-command }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''

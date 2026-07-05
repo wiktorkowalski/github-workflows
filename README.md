@@ -75,6 +75,9 @@ jobs:
     with:
       working-directory: terraform/
       aws-role-arn: arn:aws:iam::123456789012:role/GitHubActions  # empty = skip AWS
+      # pre-terraform-command: dotnet lambda package ...  # runs from repo root before init in the plan job; empty = skip
+      # dotnet-version: "10.0.x"  # install .NET SDK before pre-terraform-command; empty = skip
+      # run-plan: false  # skip the plan job (e.g. backend not bootstrapped yet); lint/format/validate still run
     secrets: inherit
 ```
 
@@ -96,6 +99,8 @@ jobs:
     with:
       working-directory: terraform/
       aws-role-arn: arn:aws:iam::123456789012:role/GitHubActions
+      # pre-terraform-command: dotnet lambda package ...  # runs from repo root before init in both plan and apply jobs; empty = skip
+      # dotnet-version: "10.0.x"  # install .NET SDK before pre-terraform-command; empty = skip
     secrets: inherit
 ```
 

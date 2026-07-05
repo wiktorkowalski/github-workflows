@@ -71,6 +71,16 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: terraform init -backend=false
 
+      # setup-terraform runs `tflint --init` at the repo root; when the tflint
+      # config lives in working-directory (e.g. infra/.tflint.hcl) its plugins
+      # are never installed, so init again where the config actually is.
+      - name: TFLint Init (working directory)
+        working-directory: ${{ inputs.working-directory }}
+        run: tflint --init
+        env:
+          # Authenticated plugin downloads avoid GitHub API rate limits.
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: TFLint
         working-directory: ${{ inputs.working-directory }}
         run: tflint -f compact

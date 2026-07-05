@@ -135,26 +135,21 @@ Build-artifact handoff works the same as in Terraform PR (see above) — build o
 
 ### `Claude Code Review`
 
-AI code review on PRs and `@claude` mentions. Posts inline comments with fix suggestions.
+AI code review on every PR push. Posts inline comments with fix suggestions, then gates: the job fails unless Claude submitted a formal review approving the **current** head commit (stale approvals and missing reviews are both red). Draft PRs are skipped.
 
 ```yaml
 name: Claude Code
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  issues:
-    types: [opened, assigned]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   review:
     uses: wiktorkowalski/github-workflows/.github/workflows/claude-code-review.yml@master
     with:
       # model: claude-opus-4-8  # default
-      # max-turns: 30  # controls cost
+      # max-turns: 60  # default; controls cost
+      # timeout-minutes: 30  # default; frees a stuck runner slot
       # review-prompt: "Also check for Go-specific issues."  # appended to default
     secrets: inherit
 ```
@@ -202,6 +197,6 @@ steps:
 
 ## Notes
 
-- All workflows default to `ubuntu-latest` runners (except Claude review which defaults to `self-hosted`)
+- All workflows default to `ubuntu-latest` runners (except Claude review which defaults to `["self-hosted", "homelab"]`)
 - Use `secrets: inherit` to pass secrets from the calling workflow
 - Runner labels are configurable via `runner-labels` input (JSON array)

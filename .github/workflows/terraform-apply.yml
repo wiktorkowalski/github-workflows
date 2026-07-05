@@ -33,6 +33,16 @@ on:
         required: false
         type: boolean
         default: true
+      build-artifact-name:
+        description: Workflow artifact to download before Terraform init in both plan and apply jobs, e.g. Lambda zips built by a caller job (empty = skip)
+        required: false
+        type: string
+        default: ""
+      build-artifact-path:
+        description: Path to download the build artifact into, relative to repo root
+        required: false
+        type: string
+        default: "."
     secrets:
       TF_API_TOKEN:
         required: false
@@ -53,6 +63,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Download build artifact
+        if: inputs.build-artifact-name != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: ${{ inputs.build-artifact-path }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''
@@ -98,6 +115,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Download build artifact
+        if: inputs.build-artifact-name != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: ${{ inputs.build-artifact-path }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''

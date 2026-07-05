@@ -28,6 +28,21 @@ on:
         required: false
         type: string
         default: "eu-west-1"
+      build-artifact-name:
+        description: Workflow artifact to download before Terraform init in the plan job, e.g. Lambda zips built by a caller job (empty = skip)
+        required: false
+        type: string
+        default: ""
+      build-artifact-path:
+        description: Path to download the build artifact into, relative to repo root
+        required: false
+        type: string
+        default: "."
+      run-plan:
+        description: Whether to run the plan job (lint/format/validate always run)
+        required: false
+        type: boolean
+        default: true
     secrets:
       TF_API_TOKEN:
         required: false
@@ -106,6 +121,7 @@ jobs:
 
   plan:
     name: Plan
+    if: inputs.run-plan
     needs: [lint, format, validate]
     runs-on: ${{ fromJson(inputs.runner-labels) }}
     permissions:
@@ -115,6 +131,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Download build artifact
+        if: inputs.build-artifact-name != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: ${{ inputs.build-artifact-path }}
 
       - name: Configure AWS credentials
         if: inputs.aws-role-arn != ''

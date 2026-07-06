@@ -180,7 +180,7 @@ jobs:
               repo: context.repo.repo,
               pull_number: prNumber,
               event: 'APPROVE',
-              body: `Auto-approved: @${prAuthor} is a code owner and all ${totalChecks} checks passed.`
+              body: `Auto-approved: PR author is a code owner and all ${totalChecks} checks passed.`
             });
 
             console.log(`Approved PR #${prNumber}`);

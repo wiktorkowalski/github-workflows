@@ -62,9 +62,7 @@ runs:
           ${planOutput}
           \`\`\`
 
-          </details>
-
-          *Pushed by: @${context.actor}*`;
+          </details>`;
 
           const comments = await github.rest.issues.listComments({
             owner: context.repo.owner,

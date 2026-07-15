@@ -67,6 +67,7 @@ jobs:
           persist-credentials: false
 
       - name: Run Claude Code Review
+        id: claude
         uses: anthropics/claude-code-action@v1
         env:
           CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1"
@@ -190,6 +191,19 @@ jobs:
             - Read enough context. Don't comment on a function without reading its callers.
 
             ${{ inputs.review-prompt }}
+
+      # The reviewer failing to submit its verdict has repeatedly been caused by
+      # permission denials invisible in the default log — surface them.
+      - name: Log permission denials
+        if: ${{ !cancelled() }}
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -n "$EXECUTION_FILE" ] && [ -f "$EXECUTION_FILE" ]; then
+            jq -r '.[] | select(.type == "result") | .permission_denials // [] | .[] | "DENIED \(.tool_name): \(.tool_input | tostring | .[0:400])"' "$EXECUTION_FILE" || true
+          else
+            echo "no execution file found"
+          fi
 
       - name: Review gate
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}

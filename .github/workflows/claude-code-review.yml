@@ -78,7 +78,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.model }}
             --max-turns ${{ inputs.max-turns }}
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api repos/${{ github.repository }}:*),Read,Glob,Grep,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api repos/${{ github.repository }}:*),Read,Glob,Grep,Write(review-body.md),Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
           prompt: |
             REPO: ${{ github.repository }}
             PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -150,12 +150,20 @@ jobs:
             - Explain WHY it's a problem, not just what's wrong
             - For bugs/security: include a concrete scenario that triggers the issue
             - Use ```suggestion blocks when you have a clear fix
+            - Only comment on files and lines that are part of the PR diff — GitHub
+              rejects comments elsewhere (422) and the comment is silently lost. An
+              observation about out-of-diff code belongs in the summary body instead.
 
-            **Summary & verdict** — after reviewing all files, submit exactly one formal review via `gh api` with your summary as the body:
+            **Summary & verdict** — after reviewing all files, submit exactly one formal review:
+            1. Write your summary to `review-body.md` (relative path, repo root) with the
+               Write tool. Do NOT inline the summary into the shell command — bodies with
+               backticks or `$` inside a quoted `-f body="..."` are rejected by the
+               command sandbox, and the verdict never gets submitted.
+            2. Submit it:
             - If NO critical or important issues found:
-              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -f body="<your summary>"`
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -F body=@review-body.md`
             - If critical or important issues found:
-              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -f body="<your summary>"`
+              `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -F body=@review-body.md`
             - Submit a formal review on EVERY run, even if you already approved an
               earlier commit and nothing changed — a CI gate checks for a review on
               the current commit and fails without one.

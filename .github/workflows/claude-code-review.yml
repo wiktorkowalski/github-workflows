@@ -76,10 +76,14 @@ jobs:
           # track_progress only supports PR actions opened/synchronize/reopened/ready_for_review
           track_progress: ${{ inputs.track-progress && contains(fromJson('["opened", "synchronize", "reopened", "ready_for_review"]'), github.event.action) }}
           include_fix_links: true
+          # NOTE: Bash prefix rules match at word boundaries — "Bash(gh api repos/o/r:*)"
+          # does NOT match "gh api repos/o/r/pulls/..." (continues with "/", not a space),
+          # which silently denied every gh api call incl. the verdict submission.
+          # Keep prefixes at word boundaries. The job token bounds the blast radius.
           claude_args: |
             --model ${{ inputs.model }}
             --max-turns ${{ inputs.max-turns }}
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api repos/${{ github.repository }}:*),Read,Glob,Grep,Write(review-body.md),Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh:*),Bash(git:*),Read,Glob,Grep,Write,Edit"
           prompt: |
             REPO: ${{ github.repository }}
             PR_NUMBER: ${{ github.event.pull_request.number }}

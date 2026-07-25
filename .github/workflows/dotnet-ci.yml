@@ -22,7 +22,9 @@ on:
         type: string
         default: "Release"
       run-format:
-        description: Run `dotnet format --verify-no-changes` (the lint step)
+        description: >-
+          Run `dotnet format --verify-no-changes` (the lint step). Runs as its own
+          job, concurrently with build+test, so it is off the critical path.
         required: false
         type: boolean
         default: true
@@ -51,6 +53,41 @@ on:
         default: '["ubuntu-latest"]'
 
 jobs:
+  # Format only depends on restore, never on build output, so running it ahead of build+test just
+  # parks 40-60s on the critical path. As its own job it overlaps them and the workflow finishes
+  # when the longer of the two does. It checks exactly what it checked before — the gate is
+  # unchanged, only its scheduling is. Cost: one extra runner and one extra restore.
+  format:
+    name: Format
+    if: inputs.run-format
+    runs-on: ${{ fromJson(inputs.runner-labels) }}
+    concurrency:
+      group: dotnet-format-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    env:
+      PROJECT: ${{ inputs.dotnet-project }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Restore
+        run: |
+          # shellcheck disable=SC2086  # $PROJECT intentionally unquoted: empty = whole repo
+          dotnet restore $PROJECT
+
+      - name: Format check
+        run: |
+          # shellcheck disable=SC2086
+          dotnet format $PROJECT --verify-no-changes --no-restore
+
   ci:
     name: .NET CI
     runs-on: ${{ fromJson(inputs.runner-labels) }}
@@ -77,12 +114,6 @@ jobs:
         run: |
           # shellcheck disable=SC2086  # $PROJECT intentionally unquoted: empty = whole repo
           dotnet restore $PROJECT
-
-      - name: Format check
-        if: inputs.run-format
-        run: |
-          # shellcheck disable=SC2086
-          dotnet format $PROJECT --verify-no-changes --no-restore
 
       - name: Build
         run: |

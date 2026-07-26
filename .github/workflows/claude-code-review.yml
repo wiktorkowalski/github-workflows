@@ -51,7 +51,12 @@ jobs:
     concurrency:
       group: claude-review-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    # Fork PRs never reach a self-hosted runner: `pull_request` checks out the
+    # fork's code, and these runners mount the host docker socket.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       pull-requests: write

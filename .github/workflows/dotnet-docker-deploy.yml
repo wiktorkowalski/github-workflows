@@ -47,6 +47,11 @@ on:
         required: false
         type: string
         default: '["self-hosted"]'
+      platforms:
+        description: Comma-separated image platforms (e.g. linux/amd64,linux/arm64); the Dockerfile must cross-compile for non-native targets
+        required: false
+        type: string
+        default: "linux/amd64"
 
 jobs:
   build:
@@ -83,6 +88,7 @@ jobs:
           context: ${{ inputs.context }}
           push: ${{ github.event_name != 'pull_request' && 'true' || 'false' }}
           build-args: ${{ inputs.build-args }}
+          platforms: ${{ inputs.platforms }}
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   deploy:

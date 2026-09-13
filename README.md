@@ -27,6 +27,7 @@ jobs:
       dotnet-project: src/MyApp/MyApp.csproj  # empty = skip .NET build
       deploy-compose-path: /home/ubuntu/docker/myapp  # empty = skip deploy
       deploy-runner-labels: '["self-hosted"]'
+      platforms: linux/amd64  # e.g. linux/amd64,linux/arm64 — non-native targets need a cross-compiling Dockerfile
     secrets: inherit
 ```
 

@@ -148,7 +148,7 @@ jobs:
   review:
     uses: wiktorkowalski/github-workflows/.github/workflows/claude-code-review.yml@master
     with:
-      # model: claude-opus-5  # default
+      # model: claude-opus-5-5  # default
       # max-turns: 150  # default; controls cost
       # timeout-minutes: 60  # default; frees a stuck runner slot
       # review-prompt: "Also check for Go-specific issues."  # appended to default

@@ -233,7 +233,10 @@ jobs:
             ## How to give feedback
 
             **Inline comments** — use `mcp__github_inline_comment__create_inline_comment` with
-            `confirmed: true` for each specific issue:
+            `confirmed: true` for EVERY finding on a diff line, including `[suggestion]` and
+            `[unverified]`. An inline comment opens a thread; threads are how the next review
+            tracks the finding (fixed / answered / open). A finding kept only in the summary
+            can't be tracked.
             - Start the body with a severity tag: `[critical]`, `[important]`, `[suggestion]`
               or `[unverified]`. Later reviews read this tag to decide what blocks.
             - Point to the exact line(s) with the problem
@@ -256,7 +259,9 @@ jobs:
 
             1. Write the summary to `review-body.md` (repo root) with the Write tool:
                - One-line verdict.
-               - New findings: `file:line` + severity + one line each.
+               - New findings: `file:line` + severity + one line each. List EVERY new
+                 finding here, suggestions included — don't move non-blocking ones into
+                 other sections. Write "none" only when there are no findings at all.
                - Previous threads: closed this run (fixed / answered) and still open, each
                  with `file:line` and one line.
                - Skipped files, if the turn budget forced it.

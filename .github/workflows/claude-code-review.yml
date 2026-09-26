@@ -177,6 +177,25 @@ jobs:
             review the whole diff. Either way, review the WHOLE PR for correctness — new commits
             can break code that was clean before.
 
+            ## Minimum depth — before any verdict
+
+            A small diff is not a reason for a shallow review. The turn budget exists for
+            depth: finishing a non-trivial PR in a handful of turns usually means you skimmed.
+            Before you submit a verdict, you must have:
+
+            - Read every changed file in full with Read, not only the diff hunks. For a file
+              over ~1000 lines, read the changed regions with wide context and every member
+              they touch.
+            - Read the direct callers of every new or changed method (find them with Grep),
+              and the implementation of anything the changed code relies on for correctness.
+            - For every new or changed piece of state (field, flag, counter, timestamp, cache,
+              status column), checked its initial value, every write, and its behavior on the
+              failure path, under concurrent access, and on shutdown / dispose / restart.
+              Missed bugs usually sit in the initial state or in a path nobody exercised.
+            - For config, CI or infrastructure changes, checked what consumes the changed value.
+
+            Don't list these checks in the summary — report only non-obvious results.
+
             ## Step 3 — What to look for (in priority order)
 
             **Critical (always flag):**

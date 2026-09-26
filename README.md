@@ -136,7 +136,7 @@ Build-artifact handoff works the same as in Terraform PR (see above) — build o
 
 ### `Claude Code Review`
 
-AI code review on every PR push. Posts inline comments with fix suggestions, then gates: the job fails unless Claude submitted a formal review approving the **current** head commit (stale approvals and missing reviews are both red). Draft PRs are skipped.
+AI code review on every PR push. Posts inline comments with fix suggestions, then gates: the job fails unless Claude submitted a formal review approving the **current** head commit (stale approvals and missing reviews are both red). Draft PRs are skipped. Each run re-reads its earlier review threads: a finding stays blocking until it is resolved, fixed in code, or answered in the thread with a reason the reviewer accepts.
 
 ```yaml
 name: Claude Code
@@ -149,8 +149,8 @@ jobs:
     uses: wiktorkowalski/github-workflows/.github/workflows/claude-code-review.yml@master
     with:
       # model: claude-opus-5-5  # default
-      # max-turns: 60  # default; controls cost
-      # timeout-minutes: 30  # default; frees a stuck runner slot
+      # max-turns: 150  # default; controls cost
+      # timeout-minutes: 60  # default; frees a stuck runner slot
       # review-prompt: "Also check for Go-specific issues."  # appended to default
     secrets: inherit
 ```

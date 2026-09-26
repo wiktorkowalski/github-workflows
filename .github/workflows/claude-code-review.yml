@@ -131,6 +131,7 @@ jobs:
             4. `gh pr checks $PR_NUMBER` — CI state. CI often still runs during your review;
                only failed checks matter. For a failed check, read the log with
                `gh run view <run-id> --log-failed` and mention it only if the PR causes it.
+               Don't report passing or pending checks.
             5. Read surrounding code with Read / Grep / Glob — don't review a hunk in isolation,
                and don't comment on a function without reading its callers.
 
@@ -153,7 +154,8 @@ jobs:
             - **Closed — resolved:** `isResolved: true`. Someone accepted the outcome. Don't
               raise it again.
             - **Closed — fixed:** the current code addresses it. `isOutdated: true` means the
-              lines changed — a hint, not proof. Verify in the code, then resolve the thread.
+              lines changed — a hint, not proof. Verify in the code, reply in one line
+              what fixed it (`Fixed in <short sha>: <what changed>`), then resolve the thread.
             - **Closed — answered:** the author replied in the thread (or in a PR comment that
               refers to it) with a reason the finding is wrong or deliberate, and the reason
               holds. Reply briefly that you accept it, then resolve the thread.
@@ -239,6 +241,7 @@ jobs:
                - Previous threads: closed this run (fixed / answered) and still open, each
                  with `file:line` and one line.
                - Skipped files, if the turn budget forced it.
+               - CI only if a check fails because of this PR.
                - Keep it short, especially on `APPROVE`: add at most ~5 bullets of
                  non-obvious things you verified. Don't restate verification from your
                  previous review — say what changed since then. No generic praise.
@@ -256,13 +259,16 @@ jobs:
             ${{ inputs.review-prompt }}
 
       # The reviewer failing to submit its verdict has repeatedly been caused by
-      # permission denials invisible in the default log — surface them.
-      - name: Log permission denials
+      # permission denials invisible in the default log — surface them. The tool-call
+      # list (names + args only, no results) shows what the reviewer actually read.
+      - name: Log review run summary
         if: ${{ !cancelled() }}
         env:
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
         run: |
           if [ -n "$EXECUTION_FILE" ] && [ -f "$EXECUTION_FILE" ]; then
+            jq -r '.[] | select(.type == "result") | "turns=\(.num_turns) duration=\(.duration_ms / 1000 | floor)s cost_usd=\(.total_cost_usd)"' "$EXECUTION_FILE" || true
+            jq -r '.[] | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | "TOOL \(.name) \(.input | (.command // .file_path // .pattern // .path // "") | tostring | .[0:160])"' "$EXECUTION_FILE" || true
             jq -r '.[] | select(.type == "result") | .permission_denials // [] | .[] | "DENIED \(.tool_name): \(.tool_input | tostring | .[0:400])"' "$EXECUTION_FILE" || true
           else
             echo "no execution file found"

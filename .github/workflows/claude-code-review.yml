@@ -259,29 +259,20 @@ jobs:
             ${{ inputs.review-prompt }}
 
       # The reviewer failing to submit its verdict has repeatedly been caused by
-      # permission denials invisible in the default log — surface them.
-      - name: Log permission denials
+      # permission denials invisible in the default log — surface them. The tool-call
+      # list (names + args only, no results) shows what the reviewer actually read.
+      - name: Log review run summary
         if: ${{ !cancelled() }}
         env:
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
         run: |
           if [ -n "$EXECUTION_FILE" ] && [ -f "$EXECUTION_FILE" ]; then
             jq -r '.[] | select(.type == "result") | "turns=\(.num_turns) duration=\(.duration_ms / 1000 | floor)s cost_usd=\(.total_cost_usd)"' "$EXECUTION_FILE" || true
+            jq -r '.[] | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | "TOOL \(.name) \(.input | (.command // .file_path // .pattern // .path // "") | tostring | .[0:160])"' "$EXECUTION_FILE" || true
             jq -r '.[] | select(.type == "result") | .permission_denials // [] | .[] | "DENIED \(.tool_name): \(.tool_input | tostring | .[0:400])"' "$EXECUTION_FILE" || true
           else
             echo "no execution file found"
           fi
-
-      # The job log shows no tool calls; keep the full transcript to audit what the
-      # reviewer actually read and ran.
-      - name: Upload review transcript
-        if: ${{ !cancelled() && steps.claude.outputs.execution_file != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: claude-review-transcript
-          path: ${{ steps.claude.outputs.execution_file }}
-          retention-days: 14
-          if-no-files-found: ignore
 
       - name: Review gate
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}

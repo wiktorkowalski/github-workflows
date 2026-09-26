@@ -22,12 +22,12 @@ on:
         description: Max Claude turns (controls cost)
         required: false
         type: number
-        default: 60
+        default: 150
       timeout-minutes:
         description: Job timeout in minutes (frees a stuck runner slot)
         required: false
         type: number
-        default: 30
+        default: 60
       review-prompt:
         description: Custom review prompt appended to default (empty = default only)
         required: false
@@ -239,7 +239,9 @@ jobs:
                - Previous threads: closed this run (fixed / answered) and still open, each
                  with `file:line` and one line.
                - Skipped files, if the turn budget forced it.
-               - If everything looks good, keep it short — no generic praise.
+               - Keep it short, especially on `APPROVE`: add at most ~5 bullets of
+                 non-obvious things you verified. Don't restate verification from your
+                 previous review — say what changed since then. No generic praise.
             2. Submit it:
                - `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=APPROVE -F body=@review-body.md`
                - `gh api repos/$REPO/pulls/$PR_NUMBER/reviews -f event=REQUEST_CHANGES -F body=@review-body.md`
@@ -273,6 +275,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # In a reusable workflow this is the caller's workflow file.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
         run: |
           sleep 5
 
@@ -283,7 +287,14 @@ jobs:
             | tail -n 1)
 
           if [ -z "$RESULT" ]; then
-            echo "::error::No formal review by Claude found"
+            # claude-code-action refuses to run when the PR changes the calling
+            # workflow file (it must match the default branch) — say so plainly.
+            CALLER_PATH=$(echo "$WORKFLOW_REF" | sed -E 's|^[^/]+/[^/]+/||; s|@.*$||')
+            if gh pr diff "$PR_NUMBER" --repo "$REPO" --name-only | grep -qxF "$CALLER_PATH"; then
+              echo "::error::Claude review skipped: this PR modifies $CALLER_PATH, and claude-code-action only runs when that file matches the default branch. Review it manually."
+            else
+              echo "::error::No formal review by Claude found"
+            fi
             exit 1
           fi
 

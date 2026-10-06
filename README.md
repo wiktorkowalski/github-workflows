@@ -26,10 +26,13 @@ jobs:
       dotnet-version: "10.0.x"
       dotnet-project: src/MyApp/MyApp.csproj  # empty = skip .NET build
       deploy-compose-path: /home/ubuntu/docker/myapp  # empty = skip deploy
+      deploy-compose-services: myapp  # empty = every service; set it so a deploy never recreates the database
       deploy-runner-labels: '["self-hosted"]'
       platforms: linux/amd64  # e.g. linux/amd64,linux/arm64 — non-native targets need a cross-compiling Dockerfile
     secrets: inherit
 ```
+
+With `deploy-compose-services` set, the deploy pulls and restarts only those services, with `--no-deps`: a database in the same compose file is not recreated, not started and not waited for. The first deploy on a new host needs one manual `docker compose up -d`, and the database image is updated by hand.
 
 ### `.NET CI`
 

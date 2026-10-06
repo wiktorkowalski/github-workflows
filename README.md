@@ -26,6 +26,7 @@ jobs:
       dotnet-version: "10.0.x"
       dotnet-project: src/MyApp/MyApp.csproj  # empty = skip .NET build
       deploy-compose-path: /home/ubuntu/docker/myapp  # empty = skip deploy
+      deploy-compose-services: myapp  # empty = every service; set it so a deploy never recreates the database
       deploy-runner-labels: '["self-hosted"]'
       platforms: linux/amd64  # e.g. linux/amd64,linux/arm64 — non-native targets need a cross-compiling Dockerfile
     secrets: inherit

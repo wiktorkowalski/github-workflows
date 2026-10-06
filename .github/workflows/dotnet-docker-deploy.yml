@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: ""
+      deploy-compose-services:
+        description: Space-separated compose services to pull and restart, without their dependencies (empty = every service in the compose file)
+        required: false
+        type: string
+        default: ""
       runner-labels:
         description: JSON array of labels for build job
         required: false
@@ -99,7 +104,19 @@ jobs:
 
     steps:
       - name: Deploy via docker compose
+        env:
+          SERVICES: ${{ inputs.deploy-compose-services }}
         run: |
           cd "${{ inputs.deploy-compose-path }}"
-          docker compose pull
-          docker compose up -d
+          if [ -n "$SERVICES" ]; then
+            # Only the named services. --no-deps: a dependency (a database) with a new
+            # image under a floating tag, or a changed env file, is not recreated by an
+            # application deploy. $SERVICES is split on purpose: one argument per service.
+            # shellcheck disable=SC2086
+            docker compose pull $SERVICES
+            # shellcheck disable=SC2086
+            docker compose up -d --no-deps $SERVICES
+          else
+            docker compose pull
+            docker compose up -d
+          fi

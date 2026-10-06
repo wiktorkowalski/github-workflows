@@ -38,7 +38,7 @@ on:
         type: string
         default: ""
       deploy-compose-services:
-        description: Space-separated compose services to pull and restart, without their dependencies (empty = every service in the compose file)
+        description: Whitespace-separated compose services to pull and restart, without their dependencies (empty = every service in the compose file)
         required: false
         type: string
         default: ""
@@ -104,18 +104,21 @@ jobs:
 
     steps:
       - name: Deploy via docker compose
+        # The service list is a bash array.
+        shell: bash
         env:
           SERVICES: ${{ inputs.deploy-compose-services }}
         run: |
           cd "${{ inputs.deploy-compose-path }}"
-          if [ -n "$SERVICES" ]; then
+          # One array element per service: no glob expansion, and a value of only
+          # whitespace is an empty list, not "every service without dependencies".
+          read -ra services <<< "$(tr '\n' ' ' <<< "$SERVICES")"
+          if [ "${#services[@]}" -gt 0 ]; then
             # Only the named services. --no-deps: a dependency (a database) with a new
             # image under a floating tag, or a changed env file, is not recreated by an
-            # application deploy. $SERVICES is split on purpose: one argument per service.
-            # shellcheck disable=SC2086
-            docker compose pull $SERVICES
-            # shellcheck disable=SC2086
-            docker compose up -d --no-deps $SERVICES
+            # application deploy. It is also not started and not waited for.
+            docker compose pull -- "${services[@]}"
+            docker compose up -d --no-deps -- "${services[@]}"
           else
             docker compose pull
             docker compose up -d

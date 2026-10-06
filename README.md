@@ -32,6 +32,8 @@ jobs:
     secrets: inherit
 ```
 
+With `deploy-compose-services` set, the deploy pulls and restarts only those services, with `--no-deps`: a database in the same compose file is not recreated, not started and not waited for. The first deploy on a new host needs one manual `docker compose up -d`, and the database image is updated by hand.
+
 ### `.NET CI`
 
 PR checks for .NET: restore → format check (`dotnet format --verify-no-changes`) → build with warnings-as-errors → test with TRX report + Cobertura coverage summary. Point `dotnet-project` at a solution (or leave empty for the repo-root solution) so tests are included.

@@ -92,7 +92,7 @@ If the Terraform config references build outputs (e.g. Lambda zips + `source_cod
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v6
       - uses: wiktorkowalski/github-workflows/actions/setup-dotnet@master
@@ -201,6 +201,6 @@ steps:
 
 ## Notes
 
-- All workflows default to `ubuntu-latest` runners (except Claude review which defaults to `["self-hosted", "homelab"]`)
+- All workflows default to `ubuntu-26.04` runners, pinned to avoid the random 24.04/26.04 mix during the `ubuntu-latest` rollout (except Claude review which defaults to `["self-hosted", "homelab"]`)
 - Use `secrets: inherit` to pass secrets from the calling workflow
 - Runner labels are configurable via `runner-labels` input (JSON array)

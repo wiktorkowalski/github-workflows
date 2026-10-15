@@ -7,7 +7,7 @@ on:
         description: JSON array of runner labels
         required: false
         type: string
-        default: '["ubuntu-latest"]'
+        default: '["ubuntu-26.04"]'
       max-retries:
         description: Max retries waiting for checks to complete
         required: false

@@ -46,7 +46,7 @@ on:
         description: JSON array of labels for build job
         required: false
         type: string
-        default: '["ubuntu-latest"]'
+        default: '["ubuntu-26.04"]'
       deploy-runner-labels:
         description: JSON array of labels for deploy job
         required: false

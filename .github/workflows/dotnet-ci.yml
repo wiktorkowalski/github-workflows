@@ -50,7 +50,7 @@ on:
         description: JSON array of runner labels
         required: false
         type: string
-        default: '["ubuntu-latest"]'
+        default: '["ubuntu-26.04"]'
 
 jobs:
   # Format only depends on restore, never on build output, so running it ahead of build+test just
